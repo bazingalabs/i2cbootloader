@@ -17,7 +17,7 @@
 # etc...
 
 # program name should not be changed...
-PROGRAM    = uboot
+PROGRAM    = i2cbootloader
 
 # enter the parameters for the avrdude isp tool
 ISPTOOL	   = usbasp
@@ -67,14 +67,15 @@ OBJCOPY        = avr-objcopy
 OBJDUMP        = avr-objdump
 
 all:
-
-lilypad: TARGET = lilypad
+lilypad: TARGET = atmega328
+lilypad: MCU_TARGET = atmega328p
 lilypad: CFLAGS += '-DMAX_TIME_COUNT=F_CPU>>1' '-DNUM_LED_FLASHES=3'
 lilypad: AVR_FREQ = 8000000L
 lilypad: $(PROGRAM)_lilypad.hex
 
 lilypad_isp: lilypad
-lilypad_isp: TARGET = lilypad
+lilypad_isp: TARGET = atmega328
+lilypad_isp: MCU_TARGET = atmega328p
 lilypad_isp: HFUSE = DD
 lilypad_isp: LFUSE = E2
 lilypad_isp: EFUSE = 00
@@ -177,9 +178,9 @@ atmega328_pro8: $(PROGRAM)_atmega328_pro_8MHz.hex
 atmega328_pro8_isp: atmega328_pro8
 atmega328_pro8_isp: TARGET = atmega328_pro_8MHz
 atmega328_pro8_isp: MCU_TARGET = atmega328p
-atmega328_pro8_isp: HFUSE = DA
-atmega328_pro8_isp: LFUSE = FF
-atmega328_pro8_isp: EFUSE = 05
+atmega328_pro8_isp: HFUSE = DD
+atmega328_pro8_isp: LFUSE = E2
+atmega328_pro8_isp: EFUSE = 00
 atmega328_pro8_isp: isp
 
 mega: TARGET = atmega1280

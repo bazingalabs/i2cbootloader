@@ -47,13 +47,22 @@
 // it will destroy whatever machine you use it on and kill anyone in a one 
 // kilometer radius. So don't even consider using it for any reason whatsoever! 
 
-
+#include <inttypes.h>
 #include <avr/io.h> 
 #include <avr/pgmspace.h> 
 #include <avr/boot.h> 
 #include <avr/interrupt.h> 
 #include <avr/wdt.h> // watchdog timer 
- #include "defines.h"
+#include <compat/twi.h>
+#include "defines.h"
+
+#ifndef cbi
+#define cbi(sfr, bit) (sfr &= ~_BV(bit))
+#endif
+
+#ifndef sbi
+#define sbi(sfr, bit) (sfr |= _BV(bit))
+#endif
 
 // USART declarations 
 static void USARTInit(); 
@@ -78,10 +87,14 @@ static void checkBlockSupport(void);
 static void blockFlashLoad(uint16_t size); 
 static void blockFlashRead(uint16_t size); 
 
+static void twi_init(uint8_t);
+static void put_twi_byte(uint8_t);
+static uint8_t get_twi_byte();
+
 // Pin definitions for boot or application reset state 
-#define   BOOT_STATE_PORT         PORTD 
-#define   BOOT_STATE_PIN         PIND 
-#define   BOOT_STATE_PIN_NUMBER   PD7  
+#define   BOOT_STATE_PORT         PORTC 
+#define   BOOT_STATE_PIN         PINC 
+#define   BOOT_STATE_PIN_NUMBER   PD0  
 
 #define SUPPORTED_DEVICE_CODE    0x73 
 
@@ -122,8 +135,9 @@ void __jumpMain(void)
 
 int main(void) 
 { 
-  DEBUG_INIT
-   USARTInit(); 
+  //DEBUG_INIT
+  // USARTInit(); 
+    twi_init(0x10);
 //sendByte('?');
 
    // Use bootloader or application code? 
@@ -216,8 +230,62 @@ void AVR109CommandParser()
             if(cmd != 0x1B) sendByte('?'); 
       } 
    } 
-}    
+} 
 
+
+void twi_init(uint8_t address) {
+  // enable twi module, acks, and twi interrupt
+ // sbi(TWCR,TWEA);
+ // sbi(TWCR,TWEN);
+  // Enable pullup
+ //sbi(PORTC,PINC4);
+ //sbi(PORTC,PINC5);
+ TWAR = address << 1; 
+}
+
+void put_twi_byte(uint8_t data) {
+  
+  // Check for START + slave address 
+  while (!(TWCR & _BV(TWINT)));
+  
+  if (TW_STATUS == TW_ST_SLA_ACK) {
+    TWDR = data;
+    cbi(TWCR,TWEA);
+  }
+  
+  // Check for slave data  
+  while (!(TWCR & _BV(TWINT)));
+  //Serial.println(TW_STATUS, BIN);
+  if (TW_STATUS == TW_ST_DATA_NACK ) {
+    
+    sbi(TWCR,TWEA);
+    // Handle STOP
+    while (!(TWCR & _BV(TWINT)));
+  }
+
+}
+
+uint8_t get_twi_byte() {
+  uint8_t ret = 0;
+  // Check for START + slave address 
+  while (!(TWCR & _BV(TWINT)));
+  if (TW_STATUS == TW_SR_SLA_ACK) {
+    sbi(TWCR,TWEA);
+  }
+  
+  // Check for slave data  
+  while (!(TWCR & _BV(TWINT)));
+  if (TW_STATUS == TW_SR_DATA_ACK) {
+    ret = TWDR;
+    sbi(TWCR,TWEA);
+    // Handle STOP
+    while (!(TWCR & _BV(TWINT)));
+    if (TW_STATUS == TW_SR_STOP) {
+      sbi(TWCR,TWEA);
+    }
+  }
+  return ret;
+}
 /***************************************************** 
    AVR109 Self Programming Commands 
 ******************************************************/ 
@@ -392,18 +460,25 @@ void sendByte( uint8_t data )
 { 
    wdt_reset(); // reset the watchdog timer, if it is set 
    // Wait for empty transmit buffer 
-   loop_until_bit_is_set(UCSR0A, UDRE0);
+   //loop_until_bit_is_set(UCSR0A, UDRE0);
    // Put data into buffer, sends the data 
-  UDR0 = data;
+  //UDR0 = data;
+   //loop_until_bit_is_set(UCSR0A, UDRE0);
+   // Put data into buffer, sends the data 
+ // UDR0 = data;
+   put_twi_byte(data);
 } 
 
 uint8_t receiveByte( void ) 
 { 
    wdt_reset(); // reset the watchdog timer, if it is set 
-   // Wait for data to be received 
-  // while ( !(UCSRA & (1<<RXC)) );    
+   // Wait for data to be received    
    // Get and return received data from buffer 
-   //return UDR; 
-   loop_until_bit_is_set(UCSR0A, RXC0);
-  return UDR0;
+   //loop_until_bit_is_set(UCSR0A, RXC0);
+  //return UDR0;
+   uint8_t b = get_twi_byte();
+//loop_until_bit_is_set(UCSR0A, UDRE0);
+   // Put data into buffer, sends the data 
+ // UDR0 = b;
+   return b;
 } 
